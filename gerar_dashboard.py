@@ -10,7 +10,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# Estilização CSS customizada
 st.markdown("""
 <style>
     div[data-testid="stMetricValue"] {
@@ -87,7 +86,7 @@ if uploaded_file is not None:
     else:
         df = df_raw.copy()
 
-    # Filtro de ativos (mantendo USDC/BRL para depósitos/juros)
+    # Filtro de ativos (preservando USDC e BRL para depósitos e recompensas)
     df_perp = df[(df['Asset'].isin(selected_assets)) | (df['Asset'].isin(['USDC', 'BRL']))].copy()
 
     # Cálculos contábeis
@@ -109,7 +108,7 @@ if uploaded_file is not None:
     total_rewards = reward_df['Subtotal'].sum()
     net_result = total_pnl + total_funding + total_rewards - trading_fees
 
-    # Cálculo de Retorno % sobre o Capital Depositado
+    # Retorno % sobre depósitos
     total_deposited = deposits_df[deposits_df['Asset'] == 'USDC']['Subtotal'].sum()
     if total_deposited == 0:
         total_deposited = deposits_df['Subtotal'].sum()
@@ -182,7 +181,7 @@ if uploaded_file is not None:
     with tab_daily:
         st.subheader("Balanço Diário: Ganhos, Perdas, Taxas de Funding e Corretagem")
 
-        # Agrupamento Diário
+        # Agrupamento Diário sem caracteres especiais em variáveis
         daily_pnl = pnl_df.groupby('Date')['Subtotal'].agg(
             Ganhos_Win = lambda s: s[s > 0].sum(),
             Perdas_Lost = lambda s: s[s < 0].sum(),
@@ -196,7 +195,7 @@ if uploaded_file is not None:
 
         daily_table = pd.concat([daily_pnl, daily_funding, daily_fees], axis=1).fillna(0)
         daily_table['Resultado_Liquido'] = daily_table['PnL_Bruto'] + daily_table['Funding_Liquido'] - daily_table['Trading_Fees']
-        daily_table['Win_Rate_%'] = (daily_table['Qtd_Win'] / (daily_table['Qtd_Win'] + daily_table['Qtd_Lost']) * 100).fillna(0)
+        daily_table['Win_Rate_Pct'] = (daily_table['Qtd_Win'] / (daily_table['Qtd_Win'] + daily_table['Qtd_Lost']) * 100).fillna(0)
         daily_table = daily_table.sort_index(ascending=False)
 
         # Gráfico diário comparativo
@@ -216,7 +215,7 @@ if uploaded_file is not None:
             'Trading_Fees': 'R$ {:,.2f}',
             'PnL_Bruto': 'R$ {:,.2f}',
             'Resultado_Liquido': 'R$ {:,.2f}',
-            'Win_Rate_%': '{:.1f}%'
+            'Win_Rate_Pct': '{:.1f}%'
         }
         st.dataframe(daily_table.style.format(format_dict), use_container_width=True)
 
@@ -224,7 +223,6 @@ if uploaded_file is not None:
     with tab_daily_trade:
         st.subheader("Desdobramento das Posições e Trades por Dia e Ativo")
 
-        # Filtro de Ativo específico nesta aba
         col_sel_asset, col_sel_type = st.columns(2)
         asset_filter = col_sel_asset.selectbox("Filtrar por Ativo Perpétuo", options=["TODOS"] + all_assets)
         type_filter = col_sel_type.multiselect("Filtrar Tipo de Operação", options=df_perp['Transaction Type'].unique(), default=df_perp['Transaction Type'].unique())
@@ -233,14 +231,14 @@ if uploaded_file is not None:
         if asset_filter != "TODOS":
             df_filtered_trade = df_filtered_trade[df_filtered_trade['Asset'] == asset_filter]
 
-        # Resumo Matricial por Dia x Ativo
+        # Resumo Matricial por Dia x Ativo (com Total_BRL no lugar de Total_R$)
         trade_matrix = df_filtered_trade.groupby(['Date', 'Asset', 'Transaction Type'])['Subtotal'].agg(
-            Total_R$ = 'sum',
+            Total_BRL = 'sum',
             Qtd = 'count'
-        ).reset_index().sort_values(['Date', 'Total_R$'], ascending=[False, True])
+        ).reset_index().sort_values(['Date', 'Total_BRL'], ascending=[False, True])
 
         st.dataframe(
-            trade_matrix.style.format({'Total_R$': 'R$ {:,.2f}'}),
+            trade_matrix.style.format({'Total_BRL': 'R$ {:,.2f}'}),
             use_container_width=True,
             height=450
         )
@@ -249,7 +247,6 @@ if uploaded_file is not None:
     with tab_history:
         st.subheader("Auditoria Completa de Lançamentos")
         
-        # Botão de download do CSV tratado
         csv_buffer = io.StringIO()
         df_perp.to_csv(csv_buffer, index=False)
         st.download_button(
